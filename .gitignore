@@ -13,6 +13,7 @@ TMP*
 *.EXE
 *.map
 *.GOBJ
+*.gobj
 *.o
 *.obj
 *.eobj
@@ -44,6 +45,9 @@ bin/geodump
 bin/ldf2sls
 bin/printsls
 bin/sym2dis
+bin/swat
+
+.build
 
 # IDE stuff
 .vscode
