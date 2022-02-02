@@ -51,3 +51,13 @@ bin/swat
 
 # IDE stuff
 .vscode
+**/.symdir.1
+**/.symdir.2
+**/.symdir.3
+**/.symdir.4
+bin/swat
+Installed/Appl/Launcher/launcher.gobj
+dependencies.mk
+Makefile
+!Installed/**/dependencies.mk
+!Installed/**/Makefile
