@@ -45,9 +45,9 @@ bin/geodump
 bin/ldf2sls
 bin/printsls
 bin/sym2dis
-bin/swat
-
 .build
+bin/cvtpcx
+bin/swat
 
 # IDE stuff
 .vscode
@@ -55,7 +55,6 @@ bin/swat
 **/.symdir.2
 **/.symdir.3
 **/.symdir.4
-bin/swat
 Installed/Appl/Launcher/launcher.gobj
 dependencies.mk
 Makefile
