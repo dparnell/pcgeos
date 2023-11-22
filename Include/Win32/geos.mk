@@ -362,8 +362,14 @@ GREVFLAGS	+= -B $(BRANCH)
 # Don't pass the -s flag so that the rev files are not changed with every build.
 # This means that the automatic versioning in the ROOT_DIR is disabled.
 
-_REL	!=	$(GREV) neweng $(REVFILE) $(GREVFLAGS) -R
+_REL2	!=	$(GREV) neweng $(REVFILE) $(GREVFLAGS) -R
 _PROTO	!=	$(GREV) getproto $(REVFILE) $(GREVFLAGS) -P
+
+#if defined(GEOS_BUILD_NUMBER)
+_REL    = $(_REL2:S/.1$/.$(GEOS_BUILD_NUMBER)/)
+#else
+_REL	= $(_REL2)
+#endif
 
 #elif defined(GEODE) && exists($(CURRENT_DIR)/$(GEODE).rev)
 ## the .rev file is local, use it.
@@ -397,7 +403,7 @@ GOC		?= goc
 XGOCFLAGS	?=
 GOCFLAGS	+= -D__GEOS__ $(-CIFLAGS) -I- $(-CIFLAGS) \
 		   `$(PRODUCT_FLAGS) goc $(PRODUCT)` \
-                   $(XGOCFLAGS) -w -l $(LIBNAME:S/^/-L /)
+                   $(XGOCFLAGS) -w $(LIBNAME:S/^/-L /)
 
 
 #
@@ -792,7 +798,7 @@ LINK		: .USE
 	del /F $(.TARGET:S|/|\\|g)
 #endif
 	$(LINK) \
-	  $(.TARGET:M*ec.geo:S/$(.TARGET)/-Og $(.ALLSRC:M*.gp) -P $(_PROTO) -R $(_REL) -E -z/)\
+	  $(.TARGET:M*ec.geo:S/$(.TARGET)/-Og $(.ALLSRC:M*.gp) -P $(_PROTO) -R $(_REL) -E/)\
 	  $(.TARGET:M*.geo:N*ec.geo:S/$(.TARGET)/-Og $(.ALLSRC:M*.gp) -P $(_PROTO) -R $(_REL) -z/)\
 	  -F./$(PRODUCT) \
 	  $(.TARGET:M*.vm:S/$(.TARGET)/-Ov -P $(_PROTO) -R $(_REL)/)\
@@ -810,7 +816,7 @@ LINK		: .USE
 	del /F $(.TARGET:S|/|\\|g)
 #endif
 	$(LINK) \
-	  $(.TARGET:M*EC.geo:S/$(.TARGET)/-Og $(.ALLSRC:M*.gp) -P $(_PROTO) -R $(_REL) -E -z/)\
+	  $(.TARGET:M*EC.geo:S/$(.TARGET)/-Og $(.ALLSRC:M*.gp) -P $(_PROTO) -R $(_REL) -E/)\
 	  $(.TARGET:M*.geo:N*EC.geo:S/$(.TARGET)/-Og $(.ALLSRC:M*.gp) -P $(_PROTO) -R $(_REL) -z/)\
 	  $(.TARGET:M*.vm:S/$(.TARGET)/-Ov -P $(_PROTO) -R $(_REL)/)\
 	  $(.TARGET:M*.com:S/$(.TARGET)/-Oc/)\
@@ -894,7 +900,7 @@ LINK		: .USE
 	$(CCOM) $(CCOMFLAGS) -fo="$(.TARGET)" "$(.IMPSRC)" $(GEOERRFL)
 
 .goc.obj	:
-	$(GOC) $(GOCFLAGS) -o $(.TARGET:R).nc $(.IMPSRC) $(GEOERRFL)
+	$(GOC) $(GOCFLAGS) -l -o $(.TARGET:R).nc $(.IMPSRC) $(GEOERRFL)
 	$(CCOM) $(CCOMFLAGS) -fo="$(.TARGET)" "$(.TARGET:R).nc" $(GEOERRFL)
 #if $(DEVEL_DIR:T) == "Installed"
 #if defined(linux)

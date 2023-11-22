@@ -127,9 +127,12 @@ minimalAppl	: minimalGame minimalUtils minimalTools minimalSavers \
 		  charm wordmat banner \
 		  bbxchat bbxmail \
 		  newsread geozip sclock\
- 	  	  hmbase pdfvu  bnkr30 ftpc
+ 	  	  hmbase pdfvu  bnkr30 ftpc \
+ 	  	  instc instf
 
 minimalUtils	: prefmgr
+
+minimalTools    : resedit
 
 minimalGame	: solitaire cword amateur bjack hearts gwpoker \
                   pyramid sokoban taipei uki mine column
@@ -165,7 +168,7 @@ minimalDriver	: nimbus ms4 ntfat os2 cdrom stream dri gdi keyboard modem gdipoin
 		  ps2 msys msser msbus kbmouse absgen genmouse emm extmem \
 		  xms filestr nonts sblaster comm spooltd \
 		  vmtree filedd logibus logiser dma mslf kbd_drivers \
-		  etherodi etherpkt msnet cdados
+		  etherodi etherpkt msnet cdados truetype
 
 printerDriver	: deskjet dj500c lbp mercury pcl4 quietjet canon48 \
 		  canonbjc  epshi24 epson24 epson48 nec24 \
@@ -560,6 +563,9 @@ Installed/Driver/Stream:		kernel MAKEDRV
 nimbus	: Installed/Driver/Font/Nimbus
 Installed/Driver/Font/Nimbus:		kernel MAKEDRV
 
+truetype : Installed/Driver/Font/TrueType
+Installed/Driver/Font/TrueType:		kernel MAKEDRV
+	
 ms4	: Installed/Driver/IFS/DOS/MS4
 Installed/Driver/IFS/DOS/MS4:		kernel MAKEDRV
 
@@ -1537,6 +1543,12 @@ oliner	: Installed/Appl/EduApps/oliner
 Installed/Appl/EduApps/oliner:		ui ansic text math spool basicdb \
 					treplib spell MAKEAPPL
 
+instc	: Installed/Appl/Install/Instc
+Installed/Appl/Install/Instc:		ui ansic MAKEAPPL
+
+instf	: Installed/Appl/Install/Instf
+Installed/Appl/Install/Instf:		ui ansic MAKEAPPL
+
 
 #=======================================================================
 
@@ -1551,7 +1563,7 @@ Installed/Appl/EduApps/oliner:		ui ansic text math spool basicdb \
 # to prevent this, ndo2000 directly uses the 'minimalxxx' calls and 'ndorest'
 
 ndo2000	: borlandobj minimalLoader minimalLibrary minimalDriver \
-	  minimalAppl ndorest
+	  minimalAppl ndorest minimalTools
 
 # The borland.obj is one of the first files that needs to be compiled
 # after a clean of the Installed directory.  The kernel and other
@@ -1706,3 +1718,6 @@ Installed/Appl/Tools/Timer:			ui text MAKEAPPL
 
 slides	: Installed/Appl/Slides
 Installed/Appl/Slides:				ui text impex convert MAKEAPPL
+
+resedit	: Installed/Appl/Tools/Localize
+Installed/Appl/Tools/Localize:		ui text spool MAKEAPPL
