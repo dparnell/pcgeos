@@ -36,6 +36,7 @@
 #include "ttgload.h"
 #include "ttraster.h"
 #include "ttextend.h"
+#include <geos.h>
 
 
 /* required by the tracing mode */
@@ -111,8 +112,6 @@ extern TEngine_Instance engineInstance;
 
 #undef TT_FAIL
 
-    /* create the engine lock */
-    MUTEX_Create( _engine->lock );
     return TT_Err_Ok;
 
   Fail:
@@ -145,11 +144,6 @@ extern TEngine_Instance engineInstance;
   {
     PEngine_Instance  _engine = &engineInstance;
 
-
-    if ( !_engine )
-      return TT_Err_Ok;
-
-    MUTEX_Destroy( _engine->lock );
 
     TTRaster_Done( _engine );
     TTObjs_Done  ( _engine );
@@ -193,9 +187,6 @@ extern TEngine_Instance engineInstance;
     TT_Stream    stream;
     PFace        _face;
 
-
-    if ( !_engine )
-      return TT_Err_Invalid_Engine;
 
     /* open the file */
     error = TT_Open_Stream( file, &stream );
@@ -260,19 +251,25 @@ extern TEngine_Instance engineInstance;
     properties->header       = &_face->fontHeader;
     properties->horizontal   = &_face->horizontalHeader;
 
+#ifdef TT_CONFIG_OPTION_PROCESS_VMTX
     if ( _face->verticalInfo )
       properties->vertical   = &_face->verticalHeader;
     else
       properties->vertical   = NULL;
+#endif
 
     properties->os2          = &_face->os2;
     properties->postscript   = &_face->postscript;
+
+  #ifdef TT_CONFIG_OPTION_PROCESS_HDMX
     properties->hdmx         = &_face->hdmx;
+  #endif
 
     return TT_Err_Ok;
   }
 
 
+#ifndef __GEOS__
 /*******************************************************************
  *
  *  Function    :  TT_Get_Face_Metrics
@@ -327,7 +324,7 @@ extern TEngine_Instance engineInstance;
  *  MT-Note : YES!  Reads only permanent data.
  *
  ******************************************************************/
-/*
+
   EXPORT_FUNC
   TT_Error  TT_Get_Face_Metrics( TT_Face     face,
                                  TT_UShort   firstGlyph,
@@ -357,7 +354,7 @@ extern TEngine_Instance engineInstance;
       UShort  advance_width;
 
 
-      for ( n = 0; n <= num; n++ )
+      for ( n = 0; n <= num; ++n )
       {
         TT_Get_Metrics( &_face->horizontalHeader,
                         firstGlyph + n, &left_bearing, &advance_width );
@@ -380,7 +377,7 @@ extern TEngine_Instance engineInstance;
       Short   top_bearing;
       UShort  advance_height;
 
-      for ( n = 0; n <= num; n++ )
+      for ( n = 0; n <= num; ++n )
       {
         TT_Get_Metrics( (TT_Horizontal_Header*)&_face->verticalHeader,
                         firstGlyph + n, &top_bearing, &advance_height );
@@ -392,7 +389,8 @@ extern TEngine_Instance engineInstance;
 
     return TT_Err_Ok;
   }
-*/
+#endif  /* __GEOS__ */
+
 
 /*******************************************************************
  *
@@ -560,13 +558,12 @@ extern TEngine_Instance engineInstance;
 
 /*******************************************************************
  *
- *  Function    :  TT_Set_Instance_CharSizes
+ *  Function    :  TT_Set_Instance_CharSize
  *
  *  Description :  Resets an instance to new point size.
  *
  *  Input  :  instance      the instance handle
- *            charWidth     the new width in 26.6 char points
- *            charHeight    the new height in 26.6 char points
+ *            charSize      the new character size in 26.6 char points
  *
  *  Output :  Error code.
  *
@@ -580,9 +577,8 @@ extern TEngine_Instance engineInstance;
  ******************************************************************/
 
   EXPORT_FUNC
-  TT_Error  TT_Set_Instance_CharSizes( TT_Instance  instance,
-                                       TT_F26Dot6   charWidth,
-                                       TT_F26Dot6   charHeight )
+  TT_Error  TT_Set_Instance_CharSize( TT_Instance  instance,
+                                       TT_F26Dot6   charSize )
   {
     PInstance  ins = HANDLE_Instance( instance );
 
@@ -590,16 +586,13 @@ extern TEngine_Instance engineInstance;
     if ( !ins )
       return TT_Err_Invalid_Instance_Handle;
 
-    if ( charWidth < 1 * 64 )
-      charWidth = 1 * 64;
+    if ( charSize < 1 * 64 )
+      charSize = 1 * 64;
 
-    if ( charHeight < 1 * 64 )
-      charHeight = 1 * 64;
-
-    ins->metrics.x_scale1 = ( charWidth * ins->metrics.x_resolution ) / 72;
+    ins->metrics.x_scale1 = ( charSize * ins->metrics.x_resolution ) / 72;
     ins->metrics.x_scale2 = ins->owner->fontHeader.Units_Per_EM;
 
-    ins->metrics.y_scale1 = ( charHeight * ins->metrics.y_resolution ) / 72;
+    ins->metrics.y_scale1 = ( charSize * ins->metrics.y_resolution ) / 72;
     ins->metrics.y_scale2 = ins->owner->fontHeader.Units_Per_EM;
 
     if ( ins->owner->fontHeader.Flags & 8 )
@@ -610,11 +603,7 @@ extern TEngine_Instance engineInstance;
 
     ins->metrics.x_ppem = ins->metrics.x_scale1 >> 6;
     ins->metrics.y_ppem = ins->metrics.y_scale1 >> 6;
-
-    if ( charWidth > charHeight )
-      ins->metrics.pointSize = charWidth;
-    else
-      ins->metrics.pointSize = charHeight;
+    ins->metrics.pointSize = charSize;
 
     ins->valid  = FALSE;
 
@@ -641,14 +630,14 @@ extern TEngine_Instance engineInstance;
  *            instances, so there is no need to protect.
  *
  ******************************************************************/
-
+/*
   EXPORT_FUNC
   TT_Error  TT_Set_Instance_CharSize( TT_Instance  instance,
                                       TT_F26Dot6   charSize )
   {
     return TT_Set_Instance_CharSizes( instance, charSize, charSize );
   }
-
+*/
 
 /*******************************************************************
  *
@@ -1091,125 +1080,6 @@ extern TEngine_Instance engineInstance;
   }
 */
 
-#ifdef __GEOS__
-
-
-/*******************************************************************
- *
- *  Function    :  TT_Get_Glyph_Region
- *
- *  Description :  Produces a region from a glyph outline.
- *
- *  Input  :  glyph      the glyph container's handle
- *            map        target region description block
- *            xOffset    x offset in fractional pixels (26.6 format)
- *            yOffset    y offset in fractional pixels (26.6 format)
- *
- *  Output :  Error code.
- *
- *  Note : Only use integer pixel offsets to preserve the fine
- *         hinting of the glyph and the 'correct' anti-aliasing
- *         (where vertical and horizontal stems aren't grayed).
- *         This means that xOffset and yOffset must be multiples
- *         of 64!
- *
- *         You can experiment with offsets of +32 to get 'blurred'
- *         versions of the glyphs (a nice effect at large sizes that
- *         some graphic designers may appreciate :)
- *
- *  MT-Safe : NO!  Glyph containers can't be shared.
- *
- ******************************************************************/
-/*
-  EXPORT_FUNC
-  TT_Error  TT_Get_Glyph_Region( TT_Glyph        glyph,
-                                 TT_Raster_Map*  map,
-                                 TT_F26Dot6      xOffset,
-                                 TT_F26Dot6      yOffset )
-  {
-    PEngine_Instance  _engine;
-    TT_Error          error;
-    PGlyph            _glyph = HANDLE_Glyph( glyph );
-    TT_Matrix         flipmatrix = HORIZONTAL_FLIP_MATRIX; 
-
-    TT_Outline  outline;
-
-
-    if ( !_glyph )
-      return TT_Err_Invalid_Glyph_Handle;
-
-    _engine = _glyph->face->engine;
-
-    outline = _glyph->outline;
-    // XXX : For now, use only dropout mode 2
-    // outline.dropout_mode = _glyph->scan_type;
-    outline.dropout_mode = 2;
-
-    TT_Transform_Outline( &outline, &flipmatrix );
-    TT_Translate_Outline( &outline, xOffset, yOffset + map->rows * 64 );
-    error = TT_Get_Outline_Region( &outline, map );
-    TT_Translate_Outline( &outline, -xOffset, - ( yOffset + map->rows * 64 ) );
-    TT_Transform_Outline( &outline, &flipmatrix );
-
-    return error;
-  }
-*/
-
- /*******************************************************************
-  *
-  *  Function    :  TT_Get_Glyph_In_Region
-  *
-  *  Description :  Renders a glyph into the given region path.
-  *
-  *  Input  :  glyph         the glyph container's handle
-  *            bitmapBlock   handle 
-  *            regionPath    handle into the outline is to be written
-  *
-  *  Output :  Error code.
-  *
-  *  MT-Safe : NO!  Glyph containers can't be shared.
-  *
-  ******************************************************************/
-/*
-  EXPORT_FUNC
-  TT_Error  TT_Get_Glyph_In_Region( TT_Glyph      glyph,
-                                    MemHandle     bitmapBlock,
-                                    Handle        regionPath )
-  {
-    PEngine_Instance  _engine;
-    TT_Error          error;
-    PGlyph            _glyph = HANDLE_Glyph( glyph );
-
-    TT_Outline  outline;
-
-    if ( !_glyph )
-      return TT_Err_Invalid_Glyph_Handle;
-
-    _engine = _glyph->face->engine;
-
-    outline = _glyph->outline;
-
-    // calc region size
-
-    // alloc bitmapBlock and init regionPath --> GrRegionPathInit
-
-    // translate by current x,y position
-
-    // iterate over contours
-
-      // iterate over segments of current contour
-
-        // switch over current segment
-
-          // LINE_SEGMENT --> GrRegionAddLineAtCP
-          // CURVE_SEGMENT --> GrRegionAddBezierAtCP
-          // ...
-
-    return TT_Err_Ok;
-  }
-*/
-#endif /* __GEOS__ */
-
 
   static const TT_Outline  null_outline
       = { 0, 0, NULL, NULL, NULL, 0, 0, 0, 0 };
@@ -1319,20 +1189,12 @@ extern TEngine_Instance engineInstance;
                                    TT_Raster_Map*  map )
   {
     PEngine_Instance  _engine = &engineInstance;
-    TT_Error          error;
 
-
-    if ( !_engine )
-      return TT_Err_Invalid_Engine;
 
     if ( !outline || !map )
       return TT_Err_Invalid_Argument;
 
-    MUTEX_Lock( _engine->raster_lock );
-    error = RENDER_Glyph( outline, map );
-    MUTEX_Release( _engine->raster_lock );
-
-    return error;
+    return RENDER_Glyph( outline, map );
   }
 
 
@@ -1358,19 +1220,12 @@ TT_Error  TT_Get_Outline_Region( TT_Outline*     outline,
                                  TT_Raster_Map*  map )
 {
   PEngine_Instance  _engine = &engineInstance;
-  TT_Error          error;
 
-
-  if ( !_engine )
-    return TT_Err_Invalid_Engine;
 
   if ( !outline || !map )
     return TT_Err_Invalid_Argument;
 
-  MUTEX_Lock( _engine->raster_lock );
-  error = RENDER_Region_Glyph( outline, map );
-  MUTEX_Release( _engine->raster_lock );
-  return error;
+  return RENDER_Region_Glyph( outline, map );
 }
 
 #endif    /* __GEOS__ */
@@ -1462,11 +1317,11 @@ TT_Error  TT_Get_Outline_Region( TT_Outline*     outline,
     TT_Vector*  vec = outline->points;
 
 
-    for ( n = 0; n < outline->n_points; n++ )
+    for ( n = 0; n < outline->n_points; ++n )
     {
       vec->x += xOffset;
       vec->y += yOffset;
-      vec++;
+      ++vec;
     }
   }
 
@@ -1509,9 +1364,9 @@ TT_Error  TT_Get_Outline_Region( TT_Outline*     outline,
 
         bbox->xMin = bbox->xMax = vec->x;
         bbox->yMin = bbox->yMax = vec->y;
-        vec++;
+        ++vec;
 
-        for ( k = 1; k < outline->n_points; k++ )
+        for ( k = 1; k < outline->n_points; ++k )
         {
           x = vec->x;
           if ( x < bbox->xMin ) bbox->xMin = x;
@@ -1519,7 +1374,7 @@ TT_Error  TT_Get_Outline_Region( TT_Outline*     outline,
           y = vec->y;
           if ( y < bbox->yMin ) bbox->yMin = y;
           if ( y > bbox->yMax ) bbox->yMax = y;
-          vec++;
+          ++vec;
         }
       }
       return TT_Err_Ok;
@@ -1612,9 +1467,6 @@ TT_Error  TT_Get_Outline_Region( TT_Outline*     outline,
     /* Load table if needed */
     error = TT_Err_Ok;
 
-    /* MT-NOTE: We're modifying the face object, so protect it. */
-    MUTEX_Lock( faze->lock );
-
     if ( !cmap->loaded )
     {
       (void)USE_Stream( faze->stream, stream );
@@ -1629,7 +1481,6 @@ TT_Error  TT_Get_Outline_Region( TT_Outline*     outline,
       else
         cmap->loaded = TRUE;
     }
-    MUTEX_Release( faze->lock );
 
     HANDLE_Set( *charMap, cmap );
 

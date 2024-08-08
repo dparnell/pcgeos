@@ -62,22 +62,24 @@
                         Short*                 bearing,
                         UShort*                advance )
   {
-    PLongMetrics  longs_m;
-
-    UShort  k = header->number_Of_HMetrics;
+    PLongMetrics  longs_m  = (PLongMetrics)GEO_LOCK( header->long_metrics_block );
+    PShortMetrics shorts_m = (PShortMetrics)GEO_LOCK( header->short_metrics_block );
+    UShort        k        = header->number_Of_HMetrics;
 
 
     if ( index < k )
     {
-      longs_m = (PLongMetrics)header->long_metrics + index;
-      *bearing = longs_m->bearing;
-      *advance = longs_m->advance;
+      *bearing = longs_m[index].bearing;
+      *advance = longs_m[index].advance;
     }
     else
     {
-      *bearing = ((PShortMetrics)header->short_metrics)[index - k];
-      *advance = ((PLongMetrics)header->long_metrics)[k - 1].advance;
+      *bearing = shorts_m[index - k];
+      *advance = longs_m[k - 1].advance;
     }
+
+    GEO_UNLOCK( header->long_metrics_block );
+    GEO_UNLOCK( header->short_metrics_block );
   }
 
 
@@ -99,6 +101,7 @@
   }
 
 
+#ifdef TT_CONFIG_OPTION_PROCESS_HDMX
 /********************************************************/
 /* Return advance width table for a given pixel size    */
 /* if it is found in the font's `hdmx' table (if any).  */
@@ -109,12 +112,13 @@
     UShort  n;
 
 
-    for ( n = 0; n < face->hdmx.num_records; n++ )
+    for ( n = 0; n < face->hdmx.num_records; ++n )
       if ( face->hdmx.records[n].ppem == ppem )
         return face->hdmx.records[n].widths;
 
     return NULL;
   }
+#endif
 
 
 /********************************************************/
@@ -141,11 +145,11 @@
 
 
     if ( delta_x )
-      for ( k = 0; k < n; k++ )
+      for ( k = 0; k < n; ++k )
         coords[k].x += delta_x;
 
     if ( delta_y )
-      for ( k = 0; k < n; k++ )
+      for ( k = 0; k < n; ++k )
         coords[k].y += delta_y;
   }
 
@@ -210,10 +214,10 @@
     mount_zone( &subg->zone, &exec->pts );
 
     /* reading the contours endpoints */
-    if ( ACCESS_Frame( (n_contours + 1) * 2L ) )
+    if ( ACCESS_Frame( (n_contours + 1) << 1 ) )
       return error;
 
-    for ( k = 0; k < n_contours; k++ )
+    for ( k = 0; k < n_contours; ++k )
       exec->pts.contours[k] = GET_UShort();
 
 
@@ -246,7 +250,7 @@
 
     /* read the flags */
 
-    if ( CHECK_ACCESS_Frame( n_points * 5L ) )
+    if ( CHECK_ACCESS_Frame( n_points * 5 ) )
       return error;
 
     j    = 0;
@@ -257,7 +261,7 @@
       Byte  c, cnt;
 
       flag[j] = c = GET_Byte();
-      j++;
+      ++j;
 
       if ( c & 8 )
       {
@@ -265,7 +269,7 @@
         while( cnt > 0 )
         {
           flag[j++] = c;
-          cnt--;
+          --cnt;
         }
       }
     }
@@ -275,7 +279,7 @@
     x    = 0;
     vec  = exec->pts.org;
 
-    for ( j = 0; j < n_points; j++ )
+    for ( j = 0; j < n_points; ++j )
     {
       if ( flag[j] & 2 )
       {
@@ -298,7 +302,7 @@
 
     y    = 0;
 
-    for ( j = 0; j < n_points; j++ )
+    for ( j = 0; j < n_points; ++j )
     {
       if ( flag[j] & 4 )
       {
@@ -331,7 +335,7 @@
 
     /* clear the touch flags */
 
-    for ( j = 0; j < n_points; j++ )
+    for ( j = 0; j < n_points; ++j )
       exec->pts.touch[j] &= TT_Flag_On_Curve;
 
     exec->pts.touch[n_points    ] = 0;
@@ -357,7 +361,7 @@
     {
      /* first scale the glyph points */
 
-      for ( j = 0; j < n_points; j++ )
+      for ( j = 0; j < n_points; ++j )
       {
         pts->org[j].x = Scale_X( &exec->metrics, pts->org[j].x );
         pts->org[j].y = Scale_Y( &exec->metrics, pts->org[j].y );
@@ -380,7 +384,7 @@
           exec->is_composite     = FALSE;
           exec->pedantic_hinting = load_flags & TTLOAD_PEDANTIC;
 
-          error = Context_Run( exec, FALSE );
+          error = Context_Run( exec );
           if (error && exec->pedantic_hinting)
             return error;
         }
@@ -423,7 +427,7 @@
     if ( subg->is_hinted                    &&
          subg->element_flag & WE_HAVE_INSTR )
     {
-      if ( ACCESS_Frame( 2L ) )
+      if ( ACCESS_Frame( 2 ) )
         return error;
 
       n_ins = GET_UShort();     /* read size of instructions */
@@ -469,7 +473,7 @@
       pts->cur[n_points - 1].x = (subg->pp2.x + 32) & -64;
     }
 
-    for ( k = 0; k < n_points; k++ )
+    for ( k = 0; k < n_points; ++k )
       pts->touch[k] &= TT_Flag_On_Curve;
 
     cur_to_org( n_points, pts );
@@ -480,7 +484,7 @@
       exec->is_composite     = TRUE;
       exec->pedantic_hinting = load_flags & TTLOAD_PEDANTIC;
 
-      error = Context_Run( exec, FALSE );
+      error = Context_Run( exec );
       if (error && exec->pedantic_hinting)
         return error;
     }
@@ -584,7 +588,12 @@
     TGlyph_Zone base_pts;
 
     TPhases     phase;
+
+#ifdef TT_CONFIG_OPTION_PROCESS_HDMX
     PByte       widths;
+#endif
+
+    PStorage    glyphLocations;
 
 
     /* first of all, check arguments */
@@ -611,11 +620,7 @@
     glyph_offset = face->dirTables[table].Offset;
 
     /* query new execution context */
-
-    if ( instance && instance->debug )
-      exec = instance->context;
-    else
-      exec = New_Context( face );
+    exec = New_Context( face );
 
     if ( !exec )
       return TT_Err_Could_Not_Find_Context;
@@ -725,8 +730,10 @@
 
       case Load_Header: /* load glyph */
 
+        glyphLocations = GEO_LOCK( face->glyphLocationBlock );
+
         if ( index + 1 < face->numLocations &&
-             face->glyphLocations[index] == face->glyphLocations[index + 1] )
+             glyphLocations[index] == glyphLocations[index + 1] )
         {
           /* as described by Frederic Loyer, these are spaces, and */
           /* not the unknown glyph.                                */
@@ -746,14 +753,16 @@
 
           exec->glyphSize = 0;
           phase = Load_End;
+          GEO_UNLOCK( face->glyphLocationBlock );
           break;
         }
 
-        offset = glyph_offset + face->glyphLocations[index];
+        offset = glyph_offset + glyphLocations[index];
+        GEO_UNLOCK( face->glyphLocationBlock );
 
         /* read first glyph header */
         if ( FILE_Seek( offset ) ||
-             ACCESS_Frame( 10L ) )
+             ACCESS_Frame( 10 ) )
           goto Fail_File;
 
         num_contours = GET_Short();
@@ -840,7 +849,7 @@
       case Load_Composite:
 
         /* create a new element on the stack */
-        load_top++;
+        ++load_top;
 
         if ( load_top > face->maxComponents )
         {
@@ -855,7 +864,7 @@
 
         /* now read composite header */
 
-        if ( ACCESS_Frame( 4L ) )
+        if ( ACCESS_Frame( 4 ) )
           goto Fail_File;
 
         subglyph->element_flag = new_flags = GET_UShort();
@@ -963,7 +972,7 @@
         {
           subglyph2 = subglyph;
 
-          load_top--;
+          --load_top;
           subglyph = exec->loadStack + load_top;
 
           /* check advance width and left side bearing */
@@ -998,7 +1007,7 @@
 
           num_elem_points = subglyph->zone.n_points;
 
-          for ( k = 0; k < num_contours; k++ )
+          for ( k = 0; k < num_contours; ++k )
             subglyph2->zone.contours[k] += num_elem_points;
 
           subglyph->zone.n_points   += num_points;
@@ -1091,13 +1100,13 @@
 
     exec->pts = base_pts;
 
-    for ( u = 0; u < num_points + 2; u++ )
+    for ( u = 0; u < num_points + 2; ++u )
     {
       glyph->outline.points[u] = exec->pts.cur[u];
       glyph->outline.flags [u] = exec->pts.touch[u];
     }
 
-    for ( k = 0; k < num_contours; k++ )
+    for ( k = 0; k < num_contours; ++k )
       glyph->outline.contours[k] = exec->pts.contours[k];
 
     glyph->outline.n_points    = num_points;
@@ -1162,6 +1171,7 @@
       TT_Pos  advance;  /* scaled vertical advance height             */
 
 
+#ifdef TT_CONFIG_OPTION_PROCESS_VMTX
       /* Get the unscaled `tsb' and `ah' values */
       if ( face->verticalInfo                          &&
            face->verticalHeader.number_Of_VMetrics > 0 )
@@ -1175,6 +1185,7 @@
                         &advance_height );
       }
       else
+#endif
       {
         /* Make up the distances from the horizontal header..     */
 
@@ -1186,7 +1197,7 @@
         /*        here with :                                     */
         /*             ascender - descender + linegap             */
         /*                                                        */
-        top_bearing    = (Short) (face->os2.sTypoLineGap / 2);
+        top_bearing    = (Short) (face->os2.sTypoLineGap >> 1 );
         advance_height = (UShort)(face->os2.sTypoAscender -
                                   face->os2.sTypoDescender +
                                   face->os2.sTypoLineGap);
@@ -1219,7 +1230,7 @@
       /* XXX : for now, we have no better algo for the lsb, but it should */
       /*       work ok..                                                  */
       /*                                                                  */
-      left = ( glyph->metrics.bbox.xMin - glyph->metrics.bbox.xMax ) / 2;
+      left = ( glyph->metrics.bbox.xMin - glyph->metrics.bbox.xMax ) >> 1;
 
       /* grid-fit them if necessary */
       if ( subglyph->is_hinted )
@@ -1234,6 +1245,7 @@
       glyph->metrics.vertAdvance  = advance;
     }
 
+#ifdef TT_CONFIG_OPTION_PROCESS_HDMX
     /* Adjust advance width to the value contained in the hdmx table. */
     if ( !exec->face->postscript.isFixedPitch && instance &&
          subglyph->is_hinted )
@@ -1243,6 +1255,7 @@
       if ( widths )
         glyph->metrics.horiAdvance = widths[glyph_index] << 6;
     }
+#endif
 
     glyph->outline.dropout_mode = (Char)exec->GS.scan_type;
 
@@ -1257,8 +1270,7 @@
     /* reset the execution context */
     exec->pts = base_pts;
 
-    if ( !instance || !instance->debug )
-      Done_Context( exec );
+    Done_Context( exec );
 
     return error;
   }

@@ -20,6 +20,7 @@
 #include "ttinit.h"
 #include "ttadapter.h"
 #include "ttcharmapper.h"
+#include "ttmemory.h"
 #include "ftxkern.h"
 #include <fileEnum.h>
 #include <geos.h>
@@ -28,6 +29,7 @@
 #include <ec.h>
 #include <initfile.h>
 #include <unicode.h>
+#include <fontID.h>
 
 
 static word DetectFontFiles(    MemHandle*  fileEnumBlock );
@@ -36,16 +38,19 @@ static void ProcessFont(        TRUETYPE_VARS,
                                 const char*  file, 
                                 MemHandle    fontInfoBlock );
 
+static Boolean isResourceSaving( TRUETYPE_VARS );
+
 static sword getFontIDAvailIndex( 
                                 FontID     fontID, 
                                 MemHandle  fontInfoBlock );
 
-static Boolean getFontID(       const char* familiyName, 
-                                FontID*     fontID );
+static Boolean getFontID( TRUETYPE_VARS, FontID* fontID );
 
 static FontWeight mapFontWeight( TT_Short weightClass );
 
-static TextStyle mapTextStyle( const char* subfamily );
+static TextStyle mapTextStyle(  const char* subfamily );
+
+static FontGroup mapFontGroup( TRUETYPE_VARS );
 
 static word getNameFromNameTable( 
                                 TRUETYPE_VARS,
@@ -60,9 +65,11 @@ static word GetKernCount(       TRUETYPE_VARS );
 
 static word toHash( const char* str );
 
-static int  strlen( const char* str );
+static word strlen( const char* str );
 
-static void strcpy( char* dest, const char* source );
+static char* strcpy( char* dest, const char* source );
+
+static void strcpyname( char* dest, const char* source );
 
 static int strcmp( const char* s1, const char* s2 );
 
@@ -286,6 +293,9 @@ EC(     ECCheckFileHandle( truetypeFile ) );
         if ( TT_Get_Face_Properties( FACE, &FACE_PROPERTIES ) )
                 goto Fail;
 
+        if ( !isResourceSaving( trueTypeVars ) )
+                goto Fail;
+
         if ( getCharMap( trueTypeVars, &CHAR_MAP ) )
                 goto Fail;
 
@@ -295,7 +305,7 @@ EC(     ECCheckFileHandle( truetypeFile ) );
         if ( getNameFromNameTable( trueTypeVars, STYLE_NAME, STYLE_NAME_ID ) == 0 )
                 goto Fail;
 
-        mappedFont = getFontID( FAMILY_NAME, &fontID );
+        mappedFont = getFontID( trueTypeVars, &fontID );
 	availIndex = getFontIDAvailIndex( fontID, fontInfoBlock );
 
         /* if we have an new font FontAvailEntry, FontInfo and Outline must be created */
@@ -392,7 +402,7 @@ EC(     ECCheckFileHandle( truetypeFile ) );
 			{
 				goto Fail;
 			}
-			outlineData++;
+			++outlineData;
 		}
 
 		/* not found append new outline entry */
@@ -443,6 +453,33 @@ Fin:
 
 
 /********************************************************************
+ *                      isResourceSaving
+ ********************************************************************
+ * SYNOPSIS:	  Checks if Face can manage with few resources.
+ * 
+ * PARAMETERS:    face            FreeType face.
+ * 
+ * RETURNS:       Boolean         TRUE if Face manages with few resources.
+ * 
+ * SIDE EFFECTS:  none
+ * 
+ * STRATEGY:      
+ * 
+ * REVISION HISTORY:
+ *      Date      Name      Description
+ *      ----      ----      -----------
+ *      19/12/23  JK        Initial Revision
+ *******************************************************************/
+static Boolean isResourceSaving( TRUETYPE_VARS )
+{
+        /* At the moment we are only checking the number of glyphs */
+        /* in the font. Further checks can be implemented here.    */
+
+        return FACE_PROPERTIES.num_Glyphs < MAX_NUM_GLYPHS;
+}
+
+
+/********************************************************************
  *                      toHash
  ********************************************************************
  * SYNOPSIS:	  Calculates the hash value of the passed string.
@@ -463,13 +500,21 @@ Fin:
 
 static word toHash( const char* str )
 {
-        word    i;
-        dword   hash = strlen( str );
+        word   i;
+        word   hash = strlen( str );
 
         for ( i = 0; i < strlen( str ); ++i )
-		hash = ( ( hash * 7 ) % 65535 ) + str[i];
+		hash = hash * 7 + str[i];
 
-        return (word) hash;
+        /* The generated FontID has the following structure:      */
+        /* 0bMMMMGGGHHHHHHHHH        MMMM      Fontmaker (4 bit)  */
+        /*                           GGG       FontGroup (3 bit)  */
+        /*                           HHHHHHHHH hash      (9 bit)  */
+        /*                                                        */
+        /* From hash the range from 0b000000000 to 0b000001111 is */
+        /* reserved for mapping original Nimbus Fonts to TrueType */
+        /* fonts via geos.ini.                                    */
+        return hash % 0x01f0 + 15;
 }
 
 
@@ -557,6 +602,63 @@ static TextStyle mapTextStyle( const char* subfamily )
 
 
 /********************************************************************
+ *                      mapFontGroup
+ ********************************************************************
+ * SYNOPSIS:	  Determines the font goup on different parameters.
+ * 
+ * PARAMETERS:    TRUETYPE_VARS   Pointer to truetypevar block.
+ * 
+ * RETURNS:       FontGroup       Group of the given font.
+ * 
+ * SIDE EFFECTS:  none
+ * 
+ * STRATEGY:      
+ * 
+ * REVISION HISTORY:
+ *      Date      Name      Description
+ *      ----      ----      -----------
+ *      28/11/23  JK        Initial Revision
+ *******************************************************************/
+
+#define B_FAMILY_TYPE           0
+#define B_PROPORTION            3
+static FontGroup mapFontGroup( TRUETYPE_VARS )
+{
+        /* The font group of a TrueType font cannot be determined exactly.  */
+        /* This implementation is therefore more of an approximation than   */
+        /* an exact determination.                                          */
+
+        /* recognize FF_MONO from panose fields */
+        if( FACE_PROPERTIES.os2->panose[B_PROPORTION] == 9 )    //Monospaced
+                return FG_MONO;
+
+        /* recognize FF_SANS_SERIF, FF_SERIF, FF_SYMBOL and FF_ORNAMENT from sFamilyClass */
+        switch( FACE_PROPERTIES.os2->sFamilyClass >> 8 )
+        {
+                case 1:
+                case 2:
+                case 3:
+                case 4:
+                case 5:
+                case 7:
+                        return FG_SERIF;
+                case 8:
+                        return FG_SANS_SERIF;
+                case 9:
+                        return FG_ORNAMENT;
+                case 12:
+                        return FG_SYMBOL;
+        }
+
+        /* recognize FF_SCRIPT from panose fields */
+        if( FACE_PROPERTIES.os2->panose[B_FAMILY_TYPE] == 2 )   //Script
+                return FG_SCRIPT;
+
+        return FG_NON_PORTABLE;
+}
+
+
+/********************************************************************
  *                      getFontID
  ********************************************************************
  * SYNOPSIS:	  If the passed font family is a mapped font, the 
@@ -565,7 +667,7 @@ static TextStyle mapTextStyle( const char* subfamily )
  * 
  * PARAMETERS:    familyName*     Font family name.
  *
- * RETURNS:       FontID          FontID found geos.ini or calculated.
+ * RETURNS:       FontID          FontID found in geos.ini or calculated.
  * 
  * SIDE EFFECTS:  none
  * 
@@ -577,15 +679,23 @@ static TextStyle mapTextStyle( const char* subfamily )
  *      21/01/23  JK        Initial Revision
  *******************************************************************/
 
-static Boolean getFontID( const char* familyName, FontID* fontID ) 
+static Boolean getFontID( TRUETYPE_VARS, FontID* fontID ) 
 {
+        char  familyName[FID_NAME_LEN];
+
+
+        /* clean up family name */
+        strcpyname( familyName, trueTypeVars->familyName );
+
+        /* get FontID from geos.ini */
         if( !InitFileReadInteger( FONTMAPPING_CATEGORY, familyName, fontID ) )
         {
                 *fontID = ( FM_TRUETYPE | (*fontID & 0x0fff) );
                 return TRUE;
         }
 
-        *fontID = MAKE_FONTID( familyName );
+        /* generate FontID */
+        *fontID = MAKE_FONTID( mapFontGroup( trueTypeVars ), trueTypeVars->familyName );
         return FALSE;
 }
 
@@ -624,7 +734,7 @@ static sword getFontIDAvailIndex( FontID fontID, MemHandle fontInfoBlock )
 			ConstructOptr( fontInfoBlock, sizeof(LMemBlockHeader))) );
         elements = LMemGetChunkSizePtr( fontsAvailEntrys ) / sizeof( FontsAvailEntry );
 
-        for( element = 0; element < elements; element++ )
+        for( element = 0; element < elements; ++element )
                 if( fontsAvailEntrys[element].FAE_fontID == fontID )
                         return element;
 
@@ -665,7 +775,7 @@ static word getNameFromNameTable( TRUETYPE_VARS, char* name, TT_UShort nameID )
         char*               str;
         
         
-        for( n = 0; n < FACE_PROPERTIES.num_Names; n++ )
+        for( n = 0; n < FACE_PROPERTIES.num_Names; ++n )
         {
                 TT_Get_Name_ID( FACE, n, &platformID, &encodingID, &languageID, &id );
                 if( id != nameID )
@@ -677,7 +787,7 @@ static word getNameFromNameTable( TRUETYPE_VARS, char* name, TT_UShort nameID )
                 {
                         TT_Get_Name_String( FACE, n, &str, &nameLength );
 
-                        for (i = 1; str != 0 && i < nameLength; i += 2)
+                        for( i = 1; str != 0 && i < nameLength; i += 2 )
                                 *name++ = str[i];
                         *name = 0;
                         return nameLength >> 1;
@@ -688,7 +798,7 @@ static word getNameFromNameTable( TRUETYPE_VARS, char* name, TT_UShort nameID )
                 {
                         TT_Get_Name_String( FACE, n, &str, &nameLength );
 
-                        for (i = 0; str != 0 && i < nameLength; i++)
+                        for( i = 0; str != 0 && i < nameLength; ++i )
                                 *name++ = str[i];
                         *name = 0;
                         return nameLength;
@@ -697,7 +807,7 @@ static word getNameFromNameTable( TRUETYPE_VARS, char* name, TT_UShort nameID )
 		{
 			TT_Get_Name_String( FACE, n, &str, &nameLength );
 	
-			for (i = 1; str != 0 && i < nameLength; i += 2)
+			for( i = 1; str != 0 && i < nameLength; i += 2 )
 				*name++ = str[i];
 			*name = 0;
 			return nameLength >> 1;
@@ -756,7 +866,7 @@ EC(     ECCheckBounds( (void*)fontHeader ) );
         TT_New_Instance( FACE, &INSTANCE );
         TT_New_Glyph( FACE, &GLYPH );
 
-        for ( geosChar = fontHeader->FH_firstChar; geosChar < fontHeader->FH_lastChar; geosChar++ )
+        for ( geosChar = fontHeader->FH_firstChar; geosChar < fontHeader->FH_lastChar; ++geosChar )
         {
                 word unicode = GeosCharToUnicode( geosChar );
 
@@ -823,23 +933,15 @@ EC(     ECCheckBounds( (void*)fontHeader ) );
         TT_Done_Glyph( GLYPH );
         TT_Done_Instance( INSTANCE );
 
-        fontHeader->FH_avgwidth = FACE_PROPERTIES.os2->xAvgCharWidth;
-        fontHeader->FH_maxwidth = FACE_PROPERTIES.horizontal->advance_Width_Max;
-
-        fontHeader->FH_accent = fontHeader->FH_accent - fontHeader->FH_ascent;    
+        fontHeader->FH_avgwidth   = FACE_PROPERTIES.os2->xAvgCharWidth;
+        fontHeader->FH_maxwidth   = FACE_PROPERTIES.horizontal->advance_Width_Max;
+        fontHeader->FH_accent     = fontHeader->FH_accent - fontHeader->FH_ascent;    
         fontHeader->FH_baseAdjust = BASELINE( UNITS_PER_EM ) - fontHeader->FH_ascent - fontHeader->FH_accent;
-        fontHeader->FH_height = fontHeader->FH_maxBSB + fontHeader->FH_ascent + DESCENT( UNITS_PER_EM ) - SAFETY( UNITS_PER_EM );
-        fontHeader->FH_minTSB = fontHeader->FH_minTSB - BASELINE( UNITS_PER_EM );
-        fontHeader->FH_maxBSB = fontHeader->FH_maxBSB - ( DESCENT( UNITS_PER_EM ) - SAFETY( UNITS_PER_EM ) );
-
-        fontHeader->FH_underPos = -FACE_PROPERTIES.postscript->underlinePosition;
-        if( fontHeader->FH_underPos == 0 )
-                fontHeader->FH_underPos = DEFAULT_UNDER_POSITION( UNITS_PER_EM );
-        fontHeader->FH_underPos = fontHeader->FH_underPos + fontHeader->FH_accent + fontHeader->FH_ascent;
-
-        fontHeader->FH_underThick = FACE_PROPERTIES.postscript->underlineThickness; 
-        if( fontHeader->FH_underThick == 0 )
-                fontHeader->FH_underThick = DEFAULT_UNDER_THICK( UNITS_PER_EM );
+        fontHeader->FH_height     = fontHeader->FH_maxBSB + fontHeader->FH_ascent + DESCENT( UNITS_PER_EM ) - SAFETY( UNITS_PER_EM );
+        fontHeader->FH_minTSB     = fontHeader->FH_minTSB - BASELINE( UNITS_PER_EM );
+        fontHeader->FH_maxBSB     = fontHeader->FH_maxBSB - ( DESCENT( UNITS_PER_EM ) - SAFETY( UNITS_PER_EM ) );
+        fontHeader->FH_underPos   = DEFAULT_UNDER_POSITION( UNITS_PER_EM ) + fontHeader->FH_accent + fontHeader->FH_ascent;
+        fontHeader->FH_underThick = DEFAULT_UNDER_THICK( UNITS_PER_EM );
         
         if( fontHeader->FH_x_height > 0 )
                 fontHeader->FH_strikePos = 3 * fontHeader->FH_x_height / 5;
@@ -903,15 +1005,17 @@ static word GetKernCount( TRUETYPE_VARS )
 {
         TT_Kerning        kerningDir;
         word              table;
+        TT_Kern_0_Pair*   pairs;
         word              numGeosKernPairs = 0;
 
         if( TT_Get_Kerning_Directory( FACE, &kerningDir ) )
                 goto Fail;
 
         /* search for format 0 subtable */
-        for( table = 0; table < kerningDir.nTables; table++ )
+        for( table = 0; table < kerningDir.nTables; ++table )
         {
                 word i;
+                word minKernValue = UNITS_PER_EM / KERN_VALUE_DIVIDENT;
 
                 if( TT_Load_Kerning_Table( FACE, table ) )
                         goto Fail;
@@ -919,16 +1023,18 @@ static word GetKernCount( TRUETYPE_VARS )
                 if( kerningDir.tables->format != 0 )
                         continue;
 
-                /* We only support decreasing the character spacing.*/
-                if( kerningDir.tables->t.kern0.pairs[i].value > 0 )
-                        continue;
+                pairs = GEO_LOCK( kerningDir.tables->t.kern0.pairsBlock );
 
-                for( i = 0; i < kerningDir.tables->t.kern0.nPairs; i++ )
+                for( i = 0; i < kerningDir.tables->t.kern0.nPairs; ++i )
                 {
-                        if( isGeosCharPair( kerningDir.tables->t.kern0.pairs[i].left,
-                                        kerningDir.tables->t.kern0.pairs[i].right ) )
-                                numGeosKernPairs++;
+                        if( ABS( pairs[i].value ) < minKernValue )
+                                continue;
+
+                        if( isGeosCharPair( pairs[i].left, pairs[i].right ) )
+                                ++numGeosKernPairs;
                 }
+
+                GEO_UNLOCK( kerningDir.tables->t.kern0.pairsBlock );
         }
 
 Fail:
@@ -941,19 +1047,35 @@ Fail:
 /* cycle. Therefore, the required functions are reimplemented here.*/
 /*******************************************************************/
 
-static int strlen( const char* str )
+static word strlen( const char* str )
 {
         const char  *s;
 
         for ( s = str; *s; ++s )
                 ;
-        return( s - str );
+        return( s - str );  
 }
 
 
-static void strcpy( char* dest, const char* source )
+static char* strcpy( char* dest, const char* source )
 {
-        while ((*dest++ = *source++) != '\0');
+        while( (*dest++ = *source++) != '\0' );
+        return dest;
+}
+
+
+static void strcpyname( char* dest, const char* source )
+{
+        while( *source != '\0' ) 
+        {
+                if( *source != ' ' ) 
+                {
+                        *dest = *source;
+                        ++dest;
+                }
+                ++source;
+        }
+        *dest = '\0';  // stringending
 }
 
 
@@ -961,8 +1083,8 @@ static int strcmp( const char* s1, const char* s2 )
 {
         while ( *s1 && ( *s1 == *s2 ) )
         {
-                s1++;
-                s2++;
+                ++s1;
+                ++s2;
         }
         return *(const unsigned char*)s1 - *(const unsigned char*)s2;
 }

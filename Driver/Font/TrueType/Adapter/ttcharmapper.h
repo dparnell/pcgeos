@@ -56,5 +56,9 @@ TT_Error getCharMap( TRUETYPE_VARS, TT_CharMap* charMap );
 
 CharMapFlags GeosCharMapFlag( word geosChar );
 
+char getGeosCharForIndex( word ttIndex );
+
+Boolean isGeosCharPair( word ttIndex_1, word ttIndex_2 );
+
 
 #endif  /* _TTCHARMAPPER_H_ */

@@ -18,6 +18,7 @@
  ***********************************************************************/
 
 #include "ttadapter.h"
+#include "ttcharmapper.h"
 #include <ec.h>
 #include <geode.h>
 
@@ -61,7 +62,9 @@ Boolean TrueType_Lock_Face(TRUETYPE_VARS, TrueTypeOutlineEntry* entry)
         FileSetCurrentPath( SP_FONT, TTF_DIRECTORY );
 
         /* get filename and load ttf file */
-        TTFILE = FileOpen( entry->TTOE_fontFileName, FILE_ACCESS_R | FILE_DENY_W );       
+        TTFILE = FileOpen( entry->TTOE_fontFileName, FILE_ACCESS_R | FILE_DENY_W );    
+EC(     ECCheckFileHandle( TTFILE) );
+
         /* change owner to ourselves, to make handle persist if application closes */
         HandleModifyOwner( (MemHandle)TTFILE, GeodeGetCodeProcessHandle() );
         FilePopDir();
@@ -149,8 +152,8 @@ static int strcmp( const char* s1, const char* s2 )
 {
         while ( *s1 && ( *s1 == *s2 ) )
         {
-                s1++;
-                s2++;
+                ++s1;
+                ++s2;
         }
         return *(const unsigned char*)s1 - *(const unsigned char*)s2;
 }
