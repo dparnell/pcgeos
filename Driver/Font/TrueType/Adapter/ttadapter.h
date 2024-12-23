@@ -72,6 +72,7 @@ extern TEngine_Instance engineInstance;
 #define MAX_NUM_GLYPHS                      2000
 
 #define BASELINE_CORRECTION                 1
+#define MIN_BITMAP_DIMENSION                1
 
 
 /***********************************************************************
@@ -282,6 +283,8 @@ typedef struct
     sword                       TM_heightX;
     sword                       TM_scriptY;
     sword                       TM_heightY;
+    word                        TM_resX;
+    word                        TM_resY;
 } TransformMatrix;
 
 typedef ByteFlags TransFlags;
@@ -341,6 +344,7 @@ typedef struct
 
 typedef struct
 {
+    Boolean                     FH_initialized;
     word                        FH_h_height;        //top of 'H'
     word                        FH_x_height;        //top of 'x'
     word                        FH_ascender;        //top of 'd'
@@ -390,6 +394,9 @@ typedef struct
     TT_CharMap                  charMap;
     TT_Outline                  outline;
 
+    /* lookuptable for truetype indices */
+    MemHandle                   lookupTable;
+
     /* currently open face */
     FileHandle                  ttfile;
     TrueTypeOutlineEntry        entry;
@@ -413,8 +420,20 @@ typedef struct
 #define SCALE_HEIGHT            trueTypeVars->scaleHeight
 #define SCALE_WIDTH             trueTypeVars->scaleWidth
 #define TTFILE                  trueTypeVars->ttfile
+#define LOOKUP_TABLE            trueTypeVars->lookupTable
 
 #define UNITS_PER_EM            FACE_PROPERTIES.header->Units_Per_EM
+
+
+/***********************************************************************
+ *      error codes
+ ***********************************************************************/
+
+typedef enum {
+    SYSTEM_ERROR_CODES,
+    CHARINDEX_OUT_OF_BOUNDS,
+    ERROR_BITMAP_BUFFER_OVERFLOW
+} FatalErrors;
 
 
 /***********************************************************************
@@ -425,7 +444,7 @@ typedef struct
  * convert value (word) to WWFixedAsDWord
  */
 #define WORD_TO_WWFIXEDASDWORD( value )          \
-        ( (WWFixedAsDWord) MakeWWFixed( value ) )
+            ( ( (long)value ) << 16 )
 
 /*
  * convert value (TT_F26DOT6) to WWFixedAsDWord
@@ -487,6 +506,7 @@ typedef struct
 
 #define MUL_100_WWFIXED( factor, percentage )   \
         GrMulWWFixed( factor, GrUDivWWFixed( ((long)percentage ) << 16, 100L << 16))
+
 
 /***********************************************************************
  *      functions

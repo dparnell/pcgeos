@@ -20,7 +20,6 @@
 
 #include "ftxkern.h"
 
-#include "ttextend.h"
 #include "tttypes.h"
 #include "ttmemory.h"
 #include "ttfile.h"
@@ -32,12 +31,6 @@
 /* Required by the tracing mode */
 #undef  TT_COMPONENT
 #define TT_COMPONENT  trace_any
-
-#define KERNING_ID  Build_Extension_ID( 'k', 'e', 'r', 'n' )
-
-#ifdef __GEOS__
-extern TEngine_Instance engineInstance;
-#endif  /* __GEOS__ */
 
 
 /*******************************************************************
@@ -266,6 +259,7 @@ EC( ECCheckBounds( pairs ) );
 
 #endif
 
+
 /*******************************************************************
  *
  *  Function    :  Kerning_Create
@@ -286,15 +280,13 @@ EC( ECCheckBounds( pairs ) );
  *
  ******************************************************************/
 
-  static TT_Error  Kerning_Create( void*  ext,
-                                   PFace  face )
+  static TT_Error  Kerning_Create( TT_Kerning*  kern,
+                                   PFace        face )
   {
     DEFINE_LOAD_LOCALS( face->stream );
 
-    TT_Kerning*  kern = (TT_Kerning*)ext;
-    UShort       num_tables;
-    Short        table;
-
+    UShort             num_tables;
+    Short              table;
     TT_Kern_Subtable*  sub;
 
 
@@ -353,7 +345,7 @@ EC( ECCheckBounds( pairs ) );
       if ( FILE_Skip( sub->length ) )
         return error;
 
-      sub++;
+      ++sub;
     }
 
     /* that's fine, leave now */
@@ -364,11 +356,11 @@ EC( ECCheckBounds( pairs ) );
 
 /*******************************************************************
  *
- *  Function    :  Kerning_Destroy
+ *  Function    :  TT_Kerning_Directory_Done
  *
  *  Description :  Destroys all kerning information.
  *
- *  Input  :  kern   pointer to the extension's kerning field
+ *  Input  :  directory   pointer to the extension's kerning field
  *
  *  Output :  error code
  *
@@ -377,25 +369,21 @@ EC( ECCheckBounds( pairs ) );
  *
  ******************************************************************/
 
-  static TT_Error  Kerning_Destroy( void*  ext,
-                                    PFace  face )
+  EXPORT_FUNC
+  TT_Error  TT_Kerning_Directory_Done( TT_Kerning*  directory )
   {
-    TT_Kerning*        kern = (TT_Kerning*)ext;
     TT_Kern_Subtable*  sub;
     UShort             n;
 
 
     /* by convention */
-    if ( !kern )
+    if ( !directory || directory->nTables == 0 )
       return TT_Err_Ok;
-
-    if ( kern->nTables == 0 )
-      return TT_Err_Ok;      /* no tables to release */
 
     /* scan the table directory and release loaded entries */
 
-    sub = kern->tables;
-    for ( n = 0; n < kern->nTables; ++n )
+    sub = directory->tables;
+    for ( n = 0; n < directory->nTables; ++n )
     {
       if ( sub->loaded )
       {
@@ -423,9 +411,6 @@ EC( ECCheckBounds( pairs ) );
           sub->t.kern2.rowWidth = 0;
           break;
 #endif
-
-        default:
-          ;       /* invalid subtable format - do nothing */
         }
 
         sub->loaded   = FALSE;
@@ -435,11 +420,11 @@ EC( ECCheckBounds( pairs ) );
         sub->coverage = 0;
         sub->format   = 0;
       }
-      sub++;
+      ++sub;
     }
 
-    FREE( kern->tables );
-    kern->nTables = 0;
+    FREE( directory->tables );
+    directory->nTables = 0;
 
     return TT_Err_Ok;
   }
@@ -447,7 +432,7 @@ EC( ECCheckBounds( pairs ) );
 
 /*******************************************************************
  *
- *  Function    :  TT_Get_Kerning_Directory
+ *  Function    :  TT_Load_Kerning_Directory
  *
  *  Description :  Returns a given face's kerning directory.
  *
@@ -465,23 +450,17 @@ EC( ECCheckBounds( pairs ) );
  ******************************************************************/
 
   EXPORT_FUNC
-  TT_Error  TT_Get_Kerning_Directory( TT_Face      face,
-                                      TT_Kerning*  directory )
+  TT_Error  TT_Load_Kerning_Directory( TT_Face      face,
+                                       TT_Kerning*  directory )
   {
     PFace        faze = HANDLE_Face( face );
-    TT_Error     error;
-    TT_Kerning*  kerning;
 
 
     if ( !faze )
       return TT_Err_Invalid_Face_Handle;
 
     /* copy directory header */
-    error = TT_Extension_Get( faze, KERNING_ID, (void**)&kerning );
-    if ( !error )
-      *directory = *kerning;
-
-    return error;
+    return Kerning_Create( directory, faze );
   }
 
 
@@ -501,13 +480,12 @@ EC( ECCheckBounds( pairs ) );
  ******************************************************************/
 
   EXPORT_FUNC
-  TT_Error  TT_Load_Kerning_Table( TT_Face    face,
-                                   TT_UShort  kern_index )
+  TT_Error  TT_Load_Kerning_Table( TT_Face      face,
+                                   TT_Kerning*  directory,
+                                   TT_UShort    kern_index )
   {
     TT_Error   error;
     TT_Stream  stream;
-
-    TT_Kerning*        kern;
     TT_Kern_Subtable*  sub;
 
 
@@ -516,17 +494,16 @@ EC( ECCheckBounds( pairs ) );
     if ( !faze )
       return TT_Err_Invalid_Face_Handle;
 
-    error = TT_Extension_Get( faze, KERNING_ID, (void**)&kern );
-    if ( error )
-      return error;
+    if ( !directory )
+      return TT_Err_Bad_Argument;
 
-    if ( kern->nTables == 0 )
+    if ( directory->nTables == 0 )
       return TT_Err_Table_Missing;
 
-    if ( kern_index >= kern->nTables )
+    if ( kern_index >= directory->nTables )
       return TT_Err_Invalid_Argument;
 
-    sub = kern->tables + kern_index;
+    sub = directory->tables + kern_index;
 
 #ifdef TT_CONFIG_OPTION_SUPPORT_KERN2
     if ( sub->format != 0 && sub->format != 2 )
@@ -559,25 +536,6 @@ EC( ECCheckBounds( pairs ) );
     /* release stream */
     DONE_Stream( stream );
 
-    return error;
-  }
-
-
-  EXPORT_FUNC
-  TT_Error  TT_Init_Kerning_Extension( void )
-  {
-    PEngine_Instance  _engine = &engineInstance;
-    TT_Error          error;
-
-
-    if ( !_engine )
-      return TT_Err_Invalid_Engine;
-
-    error = TT_Register_Extension( _engine,
-                                KERNING_ID,
-                                sizeof ( TT_Kerning ),
-                                Kerning_Create,
-                                Kerning_Destroy );
     return error;
   }
 

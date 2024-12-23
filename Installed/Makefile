@@ -97,7 +97,7 @@ minimalLibrary	: kernel swap sound net ui isui motif spool text mailbox \
 		  jpeg giflib gif htmlimpx n2txt inetmsg extui \
 		  winword8 zlib dirlist minizip idialc eps impex_libs \
 		  thumbdb ftplib flllib sitelist int8087 intx87\
-		  basicdb gridlib gsol treplib
+		  basicdb gridlib gsol treplib hostif
 #ascii
 
 prefLibs	: prefvid prefts preftd \
@@ -108,7 +108,7 @@ prefLibs	: prefvid prefts preftd \
 
 # Geos impex libraries
 impex_libs	: dib bmp clp ico pcx tif \
-		  dbase3 dbase4 htmlpars htmlimpx
+		  dbase3 dbase4 htmlimpx vcimpex
 #lot123 msmword msword wordperf5
 
 
@@ -137,7 +137,7 @@ minimalTools    : resedit wlgen
 
 minimalGame	: solitaire cword amateur bjack hearts gwpoker \
                   pyramid sokoban uki mine column battle \
-                  row4 munchers vacman snake frcell
+                  row4 munchers vacman snake frcell ladder
 
 extraGame	: taipei column2 mine2 follow treas mazerun \
 		  blkbox hiho magicboard  scode noid paddle \
@@ -155,7 +155,7 @@ minimalTools	: prntscrn
 
 otherEnsemble	: conview reader term tedit geofile dirls  \
 		  graphvwr macror dump perf bim ffind bbxcd webbox \
-		  hinv10 bbg10
+		  hinv10 bbg10 vconvert
 #geocon3
 
 #
@@ -338,6 +338,9 @@ Installed/Library/Spline:	ui MAKELIB
 
 ssmeta	: Installed/Library/SSMeta
 Installed/Library/SSMeta:	ui math MAKELIB
+
+hostif	: Installed/Library/HostIf
+Installed/Library/HostIf:	kernel MAKELIB
 
 # bsnwav will only be compiled (and is only referenced in WAV) if PRODUCT==NDO2000
 wav	: Installed/Library/Wav
@@ -1027,6 +1030,9 @@ Installed/Appl/Games/Taipei:	ui game MAKEAPPL
 uki	: Installed/Appl/Games/Uki
 Installed/Appl/Games/Uki:	ui sound text MAKEAPPL
 
+ladder	: Installed/Appl/Games/GeoLadder
+Installed/Appl/Games/GeoLadder:	ui sound ansic math MAKEAPPL
+
 column2	: Installed/Appl/Breadbox/Column
 Installed/Appl/Breadbox/Column:	ui game MAKEAPPL
 
@@ -1338,6 +1344,10 @@ tcpip	: Installed/Driver/Socket/TCPIP
 Installed/Driver/Socket/TCPIP:	netutils socket ansic resolver accpnt \
 				MAKELIB
 
+hsttcpip	: Installed/Driver/Socket/HstTCPIP
+Installed/Driver/Socket/HstTCPIP:	netutils socket ansic resolver accpnt hostif \
+				MAKELIB
+
 ppp	: Installed/Driver/Socket/PPP
 Installed/Driver/Socket/PPP:	netutils ansic accpnt MAKELIB
 
@@ -1350,7 +1360,7 @@ Installed/Appl/Breadbox/BbxBrow:	ui ansic text spool \
 					modem \
 					ibms parentc wav mailhub socket \
 					js netutils cookies idialc \
-					ppp  tcpip MAKEAPPL
+					ppp  tcpip hsttcpip MAKEAPPL
 
 # sorry, executing CLEAN in the global makefile is not only bad style, it forces
 # EVERYONE, even people not working on the browser, to compile the whole stuff
@@ -1408,7 +1418,7 @@ mapheap :	Installed/Library/MapHeap
 Installed/Library/MapHeap:			kernel MAKELIB
 
 ssl	: 	Installed/Library/SSL
-Installed/Library/SSL:				ansic socket mapheap MAKELIB
+Installed/Library/SSL:				ansic socket mapheap hostif MAKELIB
 
 # product-specific dependency on fjpeg
 impgraph	: Installed/Library/Breadbox/ImpGraph
@@ -1675,8 +1685,8 @@ Installed/Library/CoProcessor/Int8087:		kernel math MAKELIB
 intx87	: Installed/Library/CoProcessor/Intx87
 Installed/Library/CoProcessor/Intx87:		kernel math MAKELIB
 
-taskmax	: Installed/Driver/Task/Taskmax
-Installed/Driver/Task/Taskmax:			ui text MAKEDRV
+taskmax	: Installed/Driver/Task/TaskMax
+Installed/Driver/Task/TaskMax:			ui text MAKEDRV
 
 bnf : Installed/Driver/Task/BNF
 Installed/Driver/Task/BNF:				ui text MAKEDRV
@@ -1804,3 +1814,14 @@ Installed/Appl/Tools/Localize:		ui text spool MAKEAPPL
 
 wlgen	: Installed/Appl/Tools/WListGen
 Installed/Appl/Tools/WListGen:			ui ansic wmlib MAKEAPPL
+
+# Vector graphics import/export
+
+meta    : Installed/Library/Breadbox/Meta
+Installed/Library/Breadbox/Meta:		ui ansic grobj math MAKELIB
+
+vcimpex : Installed/Library/Breadbox/Impex/VCImpex
+Installed/Library/Breadbox/Impex/VCImpex:	ui impex ansic math meta MAKELIB
+
+vconvert: Installed/Appl/Breadbox/VConvert
+Installed/Appl/Breadbox/VConvert:		ui ansic grobj text math meta MAKEAPPL

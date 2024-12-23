@@ -184,7 +184,7 @@
     TT_UnitVector  projVector;
     TT_UnitVector  freeVector;
 
-    Long           loop;
+    Int            loop;
     TT_F26Dot6     minimum_distance;
     Int            round_state;
 
@@ -233,8 +233,8 @@
 
   struct  TCodeRange_
   {
-    PByte  Base;
-    ULong  Size;
+    PByte   Base;
+    UShort  Size;
   };
 
   typedef struct TCodeRange_  TCodeRange;
@@ -256,7 +256,7 @@
   struct  TDefRecord_
   {
     Int    Range;     /* in which code range is it located ? */
-    ULong  Start;     /* where does it start ?               */
+    UShort Start;     /* where does it start ?               */
     Int    Opc;       /* function #, or instruction code     */
     Bool   Active;    /* is it active ?                      */
   };
@@ -270,9 +270,9 @@
   struct  TCallRecord_
   {
     Int    Caller_Range;
-    ULong  Caller_IP;
-    Long   Cur_Count;
-    ULong  Cur_Restart;
+    UShort Caller_IP;
+    Short  Cur_Count;
+    UShort Cur_Restart;
   };
 
   typedef struct TCallRecord_  TCallRecord;
@@ -315,28 +315,30 @@
 
 #endif
 
+#define CALL_INTERPRETER  ( engineInstance.interpreterActive ? RunIns( exec ) : TT_Err_Ok )
+
   /* Rounding function, as used by the interpreter */
-  typedef TT_F26Dot6  (*TRound_Function)( EXEC_OPS TT_F26Dot6 distance,
-                                                   TT_F26Dot6 compensation );
+  typedef TT_F26Dot6  TRound_Function( EXEC_OPS TT_F26Dot6 distance,
+                                                TT_F26Dot6 compensation );
 
   /* Point displacement along the freedom vector routine, as */
   /* used by the interpreter                                 */
-  typedef void  (*TMove_Function)( EXEC_OPS PGlyph_Zone  zone,
-                                            UShort       point,
-                                            TT_F26Dot6   distance );
+  typedef void  TMove_Function( EXEC_OPS PGlyph_Zone  zone,
+                                         UShort       point,
+                                         TT_F26Dot6   distance );
 
   /* Distance projection along one of the proj. vectors, as used */
   /* by the interpreter                                          */
-  typedef TT_F26Dot6  (*TProject_Function)( EXEC_OPS TT_Vector*  v1,
-                                                     TT_Vector*  v2 );
+  typedef TT_F26Dot6  TProject_Function( EXEC_OPS TT_Vector*  v1,
+                                                  TT_Vector*  v2 );
 
   /* reading a cvt value. Take care of non-square pixels when needed */
-  typedef TT_F26Dot6  (*TGet_CVT_Function)( EXEC_OPS ULong  index );
+  typedef TT_F26Dot6  TGet_CVT_Function( EXEC_OPS UShort  index );
 
   /* setting or moving a cvt value.  Take care of non-square pixels  */
   /* when needed                                                     */
-  typedef void  (*TSet_CVT_Function)( EXEC_OPS  ULong       index,
-                                                TT_F26Dot6  value );
+  typedef void  TSet_CVT_Function ( EXEC_OPS  UShort      index,
+                                              TT_F26Dot6  value );
 
   /* subglyph transformation record */
   struct  TTransform_
@@ -474,9 +476,6 @@
 
   struct  TFace_
   {
-    /* parent engine instance for the face object */
-    PEngine_Instance  engine;
-
     /* i/o stream */
     TT_Stream  stream;
 
@@ -513,7 +512,9 @@
 
     TName_Table           nameTable;            /* name table */
 
+#ifdef TT_CONFIG_OPTION_SUPPORT_GASP
     TGasp                 gasp;                 /* the 'gasp' table */
+#endif
 
     /* The directory of TrueType tables for this typeface */
     UShort          numTables;
@@ -557,15 +558,12 @@
     TCache  instances;   /* current instances for this face */
     TCache  glyphs;      /* current glyph containers for this face */
 
-
     /* A typeless pointer to the face object extensions defined */
     /* in the 'ttextend.*' files.                               */
+  #ifdef TT_CONFIG_OPTION_EXTEND_ENGINE
     void*  extension;
     Int    n_extensions;    /* number of extensions */
-
-    /* Use extensions to provide additional capabilities to the */
-    /* engine.  Read the developer's guide in the documentation */
-    /* directory to know how to do that.                        */
+  #endif
   };
 
 
@@ -625,13 +623,13 @@
 
     TT_Error        error;     /* last execution error */
 
-    Long            top;        /* top of exec. stack  */
+    Short           top;        /* top of exec. stack  */
 
     UShort          stackSize;  /* size of exec. stack */
     PStorage        stack;      /* current exec. stack */
 
-    Long            args;
-    ULong           new_top;    /* new top after exec.    */
+    Short           args;
+    UShort          new_top;    /* new top after exec.    */
 
     TGlyph_Zone     zp0,            /* zone records */
                     zp1,
@@ -645,8 +643,8 @@
 
     Int             curRange;  /* current code range number   */
     PByte           code;      /* current code range          */
-    ULong           IP;        /* current instruction pointer */
-    ULong           codeSize;  /* size of current range       */
+    UShort          IP;        /* current instruction pointer */
+    UShort          codeSize;  /* size of current range       */
 
     Byte            opcode;    /* current opcode              */
     Int             length;    /* length of current opcode    */
@@ -700,24 +698,24 @@
                                    /* the prep program               */
     Bool            is_composite;  /* ture if the glyph is composite */
 
-    Bool            pedantic_hinting;  /* if true, read and write array   */
-                                       /* bounds faults halt the hinting  */
+#ifdef TT_CONFIG_OPTION_SUPPORT_PEDANTIC_HINTING
+   Bool            pedantic_hinting;  /* if true, read and write array   */
+#endif                                /* bounds faults halt the hinting  */
 
     /* latest interpreter additions */
 
     Long               F_dot_P;    /* dot product of freedom and projection */
                                    /* vectors                               */
-    TRound_Function    func_round; /* current rounding function             */
+    TRound_Function    _near * func_round;     /* current rounding function   */
 
-    TProject_Function  func_project,   /* current projection function */
-                       func_dualproj,  /* current dual proj. function */
-                       func_freeProj;  /* current freedom proj. func  */
+    TProject_Function  _near * func_project;   /* current projection function */
+    TProject_Function  _near * func_dualproj;  /* current dual proj. function */
 
-    TMove_Function     func_move;      /* current point move function */
+    TMove_Function     _near * func_move;      /* current point move function */
 
-    TGet_CVT_Function  func_read_cvt;  /* read a cvt entry              */
-    TSet_CVT_Function  func_write_cvt; /* write a cvt entry (in pixels) */
-    TSet_CVT_Function  func_move_cvt;  /* incr a cvt entry (in pixels)  */
+    TGet_CVT_Function  _near * func_read_cvt;  /* read a cvt entry              */
+    TSet_CVT_Function  _near * func_write_cvt; /* write a cvt entry (in pixels) */
+    TSet_CVT_Function  _near * func_move_cvt;  /* incr a cvt entry (in pixels)  */
 
     UShort             loadSize;
     PSubglyph_Stack    loadStack;      /* loading subglyph stack */
@@ -745,8 +743,6 @@
   struct  TFont_Input_
   {
     TT_Stream         stream;     /* input stream                */
-    PEngine_Instance  engine;     /* parent engine instance      */
-
   };
 
   typedef struct TFont_Input_  TFont_Input;
@@ -762,22 +758,15 @@
   LOCAL_DEF
   TT_Error  Goto_CodeRange( PExecution_Context  exec,
                             Int                 range,
-                            ULong               IP );
+                            UShort              IP );
 
-#if 0
-  /* Return a pointer to a given coderange record. */
-  /* Used only by the debugger.                    */
-  LOCAL_DEF
-  PCodeRange  Get_CodeRange( PExecution_Context  exec,
-                             Int                 range );
-#endif
 
   /* Set a given code range properties */
   LOCAL_DEF
   TT_Error  Set_CodeRange( PExecution_Context  exec,
                            Int                 range,
                            void*               base,
-                           ULong               length );
+                           UShort              length );
 
   /* Clear a given coderange */
   LOCAL_DEF
@@ -812,15 +801,6 @@
 
   /********************************************************************/
   /*                                                                  */
-  /*   Handy scaling functions                                        */
-  /*                                                                  */
-  /********************************************************************/
-
-  LOCAL_DEF TT_Pos   Scale_X( PIns_Metrics  metrics, TT_Pos  x );
-  LOCAL_DEF TT_Pos   Scale_Y( PIns_Metrics  metrics, TT_Pos  y );
-
-  /********************************************************************/
-  /*                                                                  */
   /*   Component Initializer/Finalizer                                */
   /*                                                                  */
   /*   Called from 'freetype.c'                                       */
@@ -830,8 +810,8 @@
   /*                                                                  */
   /********************************************************************/
 
-  LOCAL_DEF TT_Error  TTObjs_Init( PEngine_Instance  engine );
-  LOCAL_DEF TT_Error  TTObjs_Done( PEngine_Instance  engine );
+  LOCAL_DEF TT_Error  TTObjs_Init( );
+  LOCAL_DEF TT_Error  TTObjs_Done( );
 
 #ifdef __cplusplus
   }

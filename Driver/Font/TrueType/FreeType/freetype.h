@@ -181,7 +181,7 @@
     /*                                                                   */
     /*  Most of the engine's users will safely ignore these fields...    */
 
-    TT_Bool          high_precision;  /* high precision rendering */
+    TT_UShort        y_ppem;          /* vertical resolution      */
     TT_Bool          second_pass;     /* two sweeps rendering     */
     TT_Char          dropout_mode;    /* dropout mode             */
   };
@@ -535,10 +535,10 @@
 #ifdef TT_CONFIG_OPTION_SUPPORT_OPTIONAL_FIELDS    
     TT_Fixed  FormatType;
     TT_Fixed  italicAngle;
-#endif
-
     TT_FWord  underlinePosition;
     TT_FWord  underlineThickness;
+#endif
+
     TT_ULong  isFixedPitch;
     
 #ifdef TT_CONFIG_OPTION_SUPPORT_OPTIONAL_FIELDS
@@ -762,34 +762,29 @@
 
   /* Set device resolution for a given instance.  The values are      */
   /* given in dpi (Dots Per Inch).  Default is 96 in both directions. */
-/*
-  EXPORT_DEF
+
+  /*EXPORT_DEF
   TT_Error  TT_Set_Instance_Resolutions( TT_Instance  instance,
                                          TT_UShort    xResolution,
-                                         TT_UShort    yResolution ); */
+                                         TT_UShort    yResolution );*/
 
 
   /* Set the pointsize for a given instance.  Default is 10pt. */
 
   EXPORT_DEF
-  TT_Error  TT_Set_Instance_CharSize( TT_Instance  instance,
-                                      TT_F26Dot6   charSize );
+  TT_Error  TT_Set_Instance_CharSize_And_Resolutions( TT_Instance  instance,
+                                                      TT_F26Dot6   charSize,
+                                                      TT_UShort    xResolution,
+                                                      TT_UShort    yResolution );
   /*
   EXPORT_DEF
   TT_Error  TT_Set_Instance_CharSizes( TT_Instance  instance,
                                        TT_F26Dot6   charWidth,
                                        TT_F26Dot6   charHeight ); */
 
-#define TT_Set_Instance_PointSize( ins, ptsize )   \
-            TT_Set_Instance_CharSize( ins, ptsize*64L )
+/*#define TT_Set_Instance_PointSize( ins, ptsize )   \
+            TT_Set_Instance_CharSize( ins, ptsize*64L )*/
 
-/*
-  EXPORT_DEF
-  TT_Error  TT_Set_Instance_PixelSizes( TT_Instance  instance,
-                                        TT_UShort    pixelWidth,
-                                        TT_UShort    pixelHeight,
-                                        TT_F26Dot6   pointSize );
-*/
 
   /* This function has been deprecated!  Do not use it, as it      */
   /* doesn't work reliably.  You can perfectly control hinting     */
@@ -802,10 +797,10 @@
 */
 
   /* Return instance metrics in `metrics'. */
-
+/*
   EXPORT_DEF
   TT_Error  TT_Get_Instance_Metrics( TT_Instance           instance,
-                                     TT_Instance_Metrics*  metrics );
+                                     TT_Instance_Metrics*  metrics ); */
 
 
   /* Close a given instance object, destroying all associated data. */
@@ -879,6 +874,12 @@
 
   EXPORT_DEF
   TT_Error  TT_Get_Glyph_Metrics( TT_Glyph           glyph,
+                                  TT_Glyph_Metrics*  metrics );
+
+
+  EXPORT_DEF
+  TT_Error  TT_Get_Index_Metrics( TT_Face            face,
+                                  TT_UShort          index,
                                   TT_Glyph_Metrics*  metrics );
 
 
@@ -988,10 +989,11 @@
 
   /* Apply a transformation to a vector. */
 
+/*
   EXPORT_DEF
   void  TT_Transform_Vector( TT_F26Dot6*  x,
                              TT_F26Dot6*  y,
-                             TT_Matrix*   matrix );
+                             TT_Matrix*   matrix ); */
 
 
   /* Compute A*B/C with 64 bits intermediate precision. */

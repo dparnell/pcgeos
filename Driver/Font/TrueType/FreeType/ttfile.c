@@ -169,6 +169,7 @@
 /* that need an 'optional' stream argument.                   */
 
 
+#ifndef __GEOS__
 /*******************************************************************
  *
  *  Function    :  TTFile_Init
@@ -208,6 +209,7 @@
 
     return TT_Err_Ok;
   }
+#endif
 
 
 /*******************************************************************
@@ -433,6 +435,8 @@
 #define STREAM_VAR   stream
 
 
+#ifndef __GEOS__
+
 /*******************************************************************
  *
  *  Function    :  TTFile_Init
@@ -461,6 +465,8 @@
   {
     return TT_Err_Ok;
   }
+  
+#endif
 
 
 /*******************************************************************
@@ -968,6 +974,7 @@
   }
 
 
+#ifndef __GEOS__
 /*******************************************************************
  *
  *  Function    :  GET_Char
@@ -986,8 +993,10 @@
 
     return (Char)(*CUR_Frame.cursor++);
   }
+#endif
 
 
+#ifndef __GEOS__
 /*******************************************************************
  *
  *  Function    :  GET_Short
@@ -1008,15 +1017,16 @@
 
     CHECK_FRAME( CUR_Frame, 2 );
 
-    getshort = (Short)((CUR_Frame.cursor[0] << 8) |
+    getshort = (Short)((CUR_Frame.cursor[0] << 8) | 
                         CUR_Frame.cursor[1]);
 
     CUR_Frame.cursor += 2;
 
     return getshort;
   }
+#endif
 
-
+#ifndef __GEOS__
 /*******************************************************************
  *
  *  Function    :  GET_Long
@@ -1046,6 +1056,7 @@
 
     return getlong;
   }
+#endif
 
 
 /* END */
