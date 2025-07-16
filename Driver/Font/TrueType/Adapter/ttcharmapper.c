@@ -22,6 +22,7 @@
 #include <freetype.h>
 #include <ttmemory.h>
 #include <geos.h>
+#include <geode.h>
 #include <unicode.h>
 #include <Ansi/stdlib.h>
 
@@ -35,7 +36,7 @@
  *      internal functions
  ***********************************************************************/
 
-static int _pascal compareLookupEntries(const void *a, const void *b);
+int _pascal compareLookupEntries(const void *a, const void *b);
 
 
 //TODO: put geosCharMap into movable ressource
@@ -175,7 +176,7 @@ CharMapEntry geosCharMap[] =
         C_CENT_SIGN,                            0,
         C_POUND_SIGN,                           0,
         C_SECTION_SIGN,                         0,
-        C_BULLET_OPERATOR,                      0,
+        C_BULLET,                               0,
         C_PARAGRAPH_SIGN,                       0,
         C_LATIN_SMALL_LETTER_SHARP_S,           0,
         C_REGISTERED_TRADE_MARK_SIGN,           0,
@@ -218,8 +219,8 @@ CharMapEntry geosCharMap[] =
         C_LATIN_CAPITAL_LETTER_O_TILDE,         CMF_ACCENT,
         C_LATIN_CAPITAL_LETTER_O_E,             CMF_ACCENT,
         C_LATIN_SMALL_LETTER_O_E,               0,
-        C_EM_DASH,                              0,
         C_EN_DASH,                              0,
+        C_EM_DASH,                              0,
         C_DOUBLE_TURNED_COMMA_QUOTATION_MARK,   0,
         C_DOUBLE_COMMA_QUOTATION_MARK,          0,
         C_SINGLE_TURNED_COMMA_QUOTATION_MARK,   0,
@@ -256,8 +257,8 @@ CharMapEntry geosCharMap[] =
         C_LATIN_CAPITAL_LETTER_U_CIRCUMFLEX,    CMF_ACCENT,
         C_LATIN_CAPITAL_LETTER_U_GRAVE,         CMF_ACCENT,
         C_LATIN_SMALL_LETTER_DOTLESS_I,         0,
-        C_NON_SPACING_CIRCUMFLEX,               0,
-        C_NON_SPACING_TILDE,                    0,
+        C_MODIFIER_LETTER_CIRCUMFLEX,           0,
+        C_SPACING_TILDE,                        0,
         C_SPACING_MACRON,                       0,
         C_SPACING_BREVE,                        0,
         C_SPACING_DOT_ABOVE,                    0,
@@ -369,7 +370,7 @@ CharMapFlags GeosCharMapFlag( const word  geosChar )
  *      ----      ----      -----------
  *      06.12.22  JK        Initial Revision
  *******************************************************************/
-
+#pragma code_seg(ttcmap_TEXT)
 word CountValidGeosChars( const TT_CharMap  map, char*  firstChar, char*  lastChar )
 {
         word  charIndex;
@@ -391,7 +392,7 @@ word CountValidGeosChars( const TT_CharMap  map, char*  firstChar, char*  lastCh
 
         return (*firstChar <= *lastChar) ? (1 + *lastChar - *firstChar) : 0;
 }
-
+#pragma code_seg()
 
 /********************************************************************
  *                      CreateIndexLookupTable
@@ -416,7 +417,7 @@ word CountValidGeosChars( const TT_CharMap  map, char*  firstChar, char*  lastCh
  *      ----      ----      -----------
  *      30.09.24  JK        Initial Revision
  *******************************************************************/
-
+#pragma code_seg(ttcmap_TEXT)
 MemHandle CreateIndexLookupTable( const TT_CharMap  map )
 {
         MemHandle     memHandle;
@@ -424,8 +425,9 @@ MemHandle CreateIndexLookupTable( const TT_CharMap  map )
         int           i;
 
 
-        memHandle = MemAlloc( NUM_CHARMAPENTRIES * sizeof( LookupEntry ),
-                              HF_SHARABLE | HF_SWAPABLE, HAF_LOCK );
+        memHandle = MemAllocSetOwner( GeodeGetCodeProcessHandle(), 
+                                NUM_CHARMAPENTRIES * sizeof( LookupEntry ),
+                              	HF_SHARABLE | HF_SWAPABLE, HAF_LOCK | HAF_NO_ERR);
 EC(     ECCheckMemHandle( memHandle ) );
 
         lookupTable = (LookupEntry*)MemDeref( memHandle );
@@ -444,11 +446,11 @@ EC(     ECCheckBounds( lookupTable ) );
 }
 
 
-static int _pascal compareLookupEntries( const void *a, const void *b ) 
+int _pascal compareLookupEntries( const void *a, const void *b ) 
 {
         return (int)((LookupEntry *)a)->ttindex - (int)((LookupEntry *)b)->ttindex;
 }
-
+#pragma code_seg()
 
 /********************************************************************
  *                      GetGEOSCharForIndex
