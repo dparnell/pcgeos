@@ -229,47 +229,6 @@
   typedef struct TT_Glyph_Metrics_  TT_Glyph_Metrics;
 
 
-  /* A structure used to return horizontal _and_ vertical glyph         */
-  /* metrics.                                                           */
-  /*                                                                    */
-  /* A glyph can be used either in a horizontal or vertical layout.     */
-  /* Its glyph metrics vary with orientation.  The TT_Big_Glyph_Metrics */
-  /* structure is used to return _all_ metrics in one call.             */
-
-  struct TT_Big_Glyph_Metrics_
-  {
-    TT_BBox  bbox;          /* glyph bounding box */
-
-    TT_Pos   horiBearingX;  /* left side bearing in horizontal layouts */
-    TT_Pos   horiBearingY;  /* top side bearing in horizontal layouts  */
-
-    TT_Pos   vertBearingX;  /* left side bearing in vertical layouts */
-    TT_Pos   vertBearingY;  /* top side bearing in vertical layouts  */
-
-    TT_Pos   horiAdvance;   /* advance width for horizontal layout */
-    TT_Pos   vertAdvance;   /* advance height for vertical layout  */
-
-    /* The following fields represent unhinted scaled metrics values. */
-    /* They can be useful for applications needing to do some device  */
-    /* independent placement of glyphs.                               */
-    /*                                                                */
-    /* Applying these metrics to hinted glyphs will most surely ruin  */
-    /* the grid fitting performed by the bytecode interpreter.  These */
-    /* values are better used to compute accumulated positioning      */
-    /* distances.                                                     */
-
-  #ifdef TT_CONFIG_OPTION_SUPPORT_OPTIONAL_FIELDS
-    TT_Pos   linearHoriBearingX;  /* linearly scaled horizontal lsb     */
-    TT_Pos   linearHoriAdvance;   /* linearly scaled horizontal advance */
-
-    TT_Pos   linearVertBearingY;  /* linearly scaled vertical tsb     */
-    TT_Pos   linearVertAdvance;   /* linearly scaled vertical advance */
-  #endif
-  };
-
-  typedef struct TT_Big_Glyph_Metrics_  TT_Big_Glyph_Metrics;
-
-
   /* A structure used to return instance metrics. */
 
   struct  TT_Instance_Metrics_
@@ -399,12 +358,15 @@
 #endif
 
     TT_UFWord  advance_Width_Max;      /* advance width maximum */
+    TT_FWord   min_Left_Side_Bearing;  /* minimum left-sb       */
 
 #ifdef TT_CONFIG_OPTION_SUPPORT_OPTIONAL_FIELDS
-    TT_FWord   min_Left_Side_Bearing;  /* minimum left-sb       */
     TT_FWord   min_Right_Side_Bearing; /* minimum right-sb      */
+#endif
 
     TT_FWord   xMax_Extent;            /* xmax extents          */
+
+#ifdef TT_CONFIG_OPTION_SUPPORT_OPTIONAL_FIELDS
     TT_FWord   caret_Slope_Rise;
     TT_FWord   caret_Slope_Run;
 
@@ -449,12 +411,13 @@
 #endif
 
     TT_UFWord  advance_Height_Max;      /* advance height maximum */
-
-#ifdef TT_CONFIG_OPTION_SUPPORT_OPTIONAL_FIELDS
     TT_FWord   min_Top_Side_Bearing;    /* minimum left-sb or top-sb       */
+#ifdef TT_CONFIG_OPTION_SUPPORT_OPTIONAL_FIELDS
     TT_FWord   min_Bottom_Side_Bearing; /* minimum right-sb or bottom-sb   */
-
+#endif
     TT_FWord   yMax_Extent;             /* xmax or ymax extents            */
+
+    #ifdef TT_CONFIG_OPTION_SUPPORT_OPTIONAL_FIELDS
     TT_FWord   caret_Slope_Rise;
     TT_FWord   caret_Slope_Run;
     TT_FWord   caret_Offset;
@@ -492,10 +455,10 @@
     TT_UShort  version;                /* 0x0001 */
     TT_FWord   xAvgCharWidth;
     TT_UShort  usWeightClass;
-    TT_UShort  usWidthClass;
-    TT_Short   fsType;
 
 #ifdef TT_CONFIG_OPTION_SUPPORT_OPTIONAL_FIELDS
+    TT_UShort  usWidthClass;
+    TT_Short   fsType;
     TT_FWord   ySubscriptXSize;
     TT_FWord   ySubscriptYSize;
     TT_FWord   ySubscriptXOffset;
@@ -536,7 +499,11 @@
     TT_ULong   ulCodePageRange1;       /* Bits 0-31   */
     TT_ULong   ulCodePageRange2;       /* Bits 32-63  */
 #endif
-  };
+
+    /* only version 2 tables: */
+    TT_Short   sxHeight;
+    TT_Short   sCapHeight;  
+  };  
 
   typedef struct TT_OS2_  TT_OS2;
 
